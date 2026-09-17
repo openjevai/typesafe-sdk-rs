@@ -1,0 +1,41 @@
+[package]
+name = "typesafe-sdk"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+license = "MIT"
+description = "Rust SDK for the TypeSafe AI API (community-maintained)"
+repository = "https://github.com/netf/typesafe-sdk-rs"
+readme = "README.md"
+keywords = ["ai", "api", "sdk", "typesafe", "classification"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "http2", "rustls", "system-proxy"] }
+tokio = { version = "1", features = ["time"] }
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` keeps JSON objects in document order, matching the Python SDK's dicts: the raw
+# body an error message falls back to, and the order answers are decoded in, both depend on it.
+serde_json = { version = "1", features = ["preserve_order"] }
+http = "1.1"
+thiserror = "2"
+log = "0.4"
+
+[features]
+default = []
+blocking = ["reqwest/blocking"]
+
+[lints.clippy]
+# `Error` carries the response body and headers a caller needs to inspect, so it is intentionally
+# not boxed; the allocation and indirection would buy nothing on the success path.
+result_large_err = "allow"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "sync", "time"] }
+
+[[example]]
+name = "blocking"
+required-features = ["blocking"]
+
+[package.metadata.docs.rs]
+all-features = true
