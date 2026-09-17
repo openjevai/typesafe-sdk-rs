@@ -223,11 +223,10 @@ async fn base_url_slashes_are_trimmed_and_prefixes_are_kept() {
 
 #[tokio::test]
 async fn a_per_call_timeout_is_enforced_against_a_delayed_reply() {
+    // The reply is a full second away, so the elapsed bound below proves the *client* aborted the
+    // request rather than the server answering late.
     let server = MockServer::start(|_| {
-        Action::delay(
-            Duration::from_millis(300),
-            Reply::json(200, system_one_body()),
-        )
+        Action::delay(Duration::from_secs(1), Reply::json(200, system_one_body()))
     });
     let client = retry_free(&server, Duration::from_secs(5));
 
@@ -248,8 +247,8 @@ async fn a_per_call_timeout_is_enforced_against_a_delayed_reply() {
         "{error}"
     );
     assert!(
-        elapsed < Duration::from_millis(250),
-        "the timeout should fire before the reply: {elapsed:?}"
+        elapsed < Duration::from_millis(700),
+        "the timeout should fire long before the one second reply: {elapsed:?}"
     );
 }
 

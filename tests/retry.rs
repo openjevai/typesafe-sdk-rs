@@ -257,13 +257,16 @@ async fn server_requested_delays_are_honoured() {
         )),
         _ => Action::json(200, system_one_body()),
     });
+    // With a five second backoff configured, finishing within a second proves the header won.
+    let policy = RetryPolicy::new()
+        .with_budget(None)
+        .with_backoff_initial(Duration::from_secs(5));
     let started = Instant::now();
-    call(&client_with(&server, RetryPolicy::new().with_budget(None)))
-        .await
-        .unwrap();
+    call(&client_with(&server, policy)).await.unwrap();
+    let elapsed = started.elapsed();
     assert!(
-        started.elapsed() < Duration::from_millis(300),
-        "an explicit zero delay is honoured instead of the default backoff"
+        elapsed < Duration::from_secs(1),
+        "an explicit zero delay is honoured instead of the backoff: {elapsed:?}"
     );
 
     let server = MockServer::start(|request| match request.retry_count() {
@@ -733,10 +736,12 @@ async fn server_delays_apply_to_any_retryable_status() {
 
 #[tokio::test]
 async fn milliseconds_beat_seconds_when_both_headers_are_valid() {
+    // The seconds header is a full second so the assertion has room: the call must finish long before
+    // that delay could have elapsed, which proves `retry-after-ms` won rather than the backoff.
     let server = MockServer::start(|request| match request.retry_count() {
         None => Action::Reply(Reply::with_headers(
             429,
-            [("retry-after-ms", "0"), ("Retry-After", "50")],
+            [("retry-after-ms", "0"), ("Retry-After", "1")],
             Vec::new(),
         )),
         _ => Action::json(200, system_one_body()),
@@ -745,10 +750,10 @@ async fn milliseconds_beat_seconds_when_both_headers_are_valid() {
     call(&client_with(&server, RetryPolicy::new().with_budget(None)))
         .await
         .unwrap();
+    let elapsed = started.elapsed();
     assert!(
-        started.elapsed() < Duration::from_millis(40),
-        "the millisecond header wins: {:?}",
-        started.elapsed()
+        elapsed < Duration::from_millis(500),
+        "the millisecond header wins over the one second delay: {elapsed:?}"
     );
 }
 
