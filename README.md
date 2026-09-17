@@ -54,8 +54,9 @@ if let Some(answer) = response.choice("category") {
 ```
 
 `TypeSafeClient::new("sk-...")` takes the key explicitly, and `TypeSafeClient::builder()` covers the
-remaining options (see [Configuration](#configuration)). The snippets in this file are compiled as
-doctests, and `examples/` holds runnable versions with `#[tokio::main]` on `main`.
+remaining options (see [Configuration](#configuration)). Every Rust snippet in this file is compiled
+as a doctest unless it is marked `ignore` (the two that need the `blocking` feature or a runtime are),
+and `examples/` holds runnable versions with `#[tokio::main]` on `main`.
 
 ## Questions
 
@@ -342,9 +343,22 @@ fn main() -> typesafe_sdk::Result<()> {
 ```
 
 `blocking::ClientBuilder` takes the same options, with `http_client(reqwest::blocking::Client)`
-replacing the async client, and `client.models().list().send()?` lists models. The snippet above is
-skipped by doctests because the module only exists with the feature enabled; `examples/blocking.rs` is
-compiled with it.
+replacing the async client, and `client.models().list().send()?` lists models.
+
+Keep the two apart per call: a blocking client must not be created, used, or dropped inside an async
+runtime (the blocking HTTP client panics on its own runtime shutdown there), so run async work in a
+runtime that is dropped first:
+
+```rust,ignore
+let runtime = tokio::runtime::Runtime::new()?;
+runtime.block_on(async { /* async client calls */ })?;
+drop(runtime);
+
+let client = typesafe_sdk::blocking::TypeSafeClient::from_env()?; // safe here
+```
+
+The snippet above is skipped by doctests because the module only exists with the feature enabled;
+`examples/blocking.rs` is compiled with it.
 
 ## Configuration
 

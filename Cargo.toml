@@ -25,6 +25,11 @@ log = "0.4"
 default = []
 blocking = ["reqwest/blocking"]
 
+[lib]
+# Kept explicit so the library name stays `typesafe_sdk` even if the package is renamed, which a
+# crates.io publish requires while `typesafe-sdk` is taken there.
+name = "typesafe_sdk"
+
 [lints.clippy]
 # `Error` carries the response body and headers a caller needs to inspect, so it is intentionally
 # not boxed; the allocation and indirection would buy nothing on the success path.

@@ -6,6 +6,10 @@
 //! typesafe-sdk = { version = "0.1", features = ["blocking"] }
 //! ```
 //!
+//! A blocking client must not be created, used, or dropped inside an asynchronous runtime — the
+//! underlying blocking HTTP client panics on its own runtime shutdown. Run asynchronous work in a
+//! runtime that is dropped first, or use the asynchronous client in async code.
+//!
 //! ```ignore
 //! use typesafe_sdk::blocking::TypeSafeClient;
 //! use typesafe_sdk::{Choice, Noul};
