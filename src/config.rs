@@ -7,19 +7,97 @@ use http::{HeaderMap, HeaderName, HeaderValue};
 
 use crate::constants::{
     API_KEY_ENV, BASE_URL_ENV, DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_MODEL_ENV, DEFAULT_TIMEOUT,
+    JEV_PROVIDER_ENV, OPENJEV_API_KEY_ENV, OPENJEV_DEFAULT_BASE_URL, OPENJEV_DEFAULT_MODEL,
 };
 use crate::error::ConfigError;
 use crate::logging::redact_headers;
 
+/// The API provider to use.
+///
+/// TypeSafe is the default and remains unchanged for anyone with a `TYPESAFE_API_KEY`.
+/// OpenJEV is a free community gateway to the same Jev model — set `OPENJEV_API_KEY`
+/// (or `JEV_PROVIDER=openjev`) to use it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Provider {
+    /// TypeSafe direct API (default).
+    TypeSafe,
+    /// OpenJEV community gateway to the same Jev model.
+    OpenJEV,
+}
+
+impl Provider {
+    /// Returns the provider's display name.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Provider::TypeSafe => "typesafe",
+            Provider::OpenJEV => "openjev",
+        }
+    }
+}
+
+impl fmt::Display for Provider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.name())
+    }
+}
+
+/// Resolves the provider from an explicit choice, the `JEV_PROVIDER` env var, or the
+/// presence of API keys, in that order.
+///
+/// 1. Explicit `provider` wins.
+/// 2. `JEV_PROVIDER=openjev` (or `typesafe`) env var.
+/// 3. If an explicit `api_key` was passed, TypeSafe (the default).
+/// 4. If `TYPESAFE_API_KEY` is set, TypeSafe.
+/// 5. If `OPENJEV_API_KEY` is set, OpenJEV.
+/// 6. Otherwise TypeSafe (the key resolution will then fail with the TypeSafe env var name).
+fn resolve_provider(explicit: Option<Provider>, api_key: Option<&str>) -> Provider {
+    if let Some(provider) = explicit {
+        return provider;
+    }
+    if let Some(provider) = provider_from_env() {
+        return provider;
+    }
+    if api_key.is_some() {
+        return Provider::TypeSafe;
+    }
+    if env_var_non_empty(API_KEY_ENV) {
+        return Provider::TypeSafe;
+    }
+    if env_var_non_empty(OPENJEV_API_KEY_ENV) {
+        return Provider::OpenJEV;
+    }
+    Provider::TypeSafe
+}
+
+/// Reads `JEV_PROVIDER` and maps it to a [`Provider`].
+fn provider_from_env() -> Option<Provider> {
+    let value = std::env::var(JEV_PROVIDER_ENV).ok()?;
+    let value = value.trim().to_ascii_lowercase();
+    match value.as_str() {
+        "openjev" => Some(Provider::OpenJEV),
+        "typesafe" => Some(Provider::TypeSafe),
+        _ => None,
+    }
+}
+
+/// Returns whether the named environment variable is set and non-empty after trimming.
+fn env_var_non_empty(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+}
+
 /// The settings a client builder resolves into a [`Config`].
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ConfigInput {
-    /// API key, taking precedence over `TYPESAFE_API_KEY`.
+    /// API key, taking precedence over `TYPESAFE_API_KEY` (or `OPENJEV_API_KEY` when OpenJEV is selected).
     pub(crate) api_key: Option<String>,
     /// API root, taking precedence over `TYPESAFE_BASE_URL`.
     pub(crate) base_url: Option<String>,
     /// Default model, taking precedence over `TYPESAFE_DEFAULT_MODEL`.
     pub(crate) model: Option<String>,
+    /// Explicit provider choice, taking precedence over `JEV_PROVIDER` and key-based detection.
+    pub(crate) provider: Option<Provider>,
     /// Timeout applied to each HTTP operation.
     pub(crate) timeout: Option<Duration>,
     /// Timeout applied to connecting.
@@ -39,6 +117,8 @@ pub(crate) struct Config {
     base_url: String,
     /// Model used when a call does not override it.
     default_model: String,
+    /// The provider in use (TypeSafe or OpenJEV).
+    provider: Provider,
     /// Timeout applied to each HTTP operation, or `None` to leave it unset.
     timeout: Option<Duration>,
     /// Timeout applied to connecting, or `None` to leave it unset.
@@ -53,13 +133,25 @@ impl Config {
     /// `inherit_timeout` keeps an unset `timeout` unset, so a caller-supplied HTTP client's own
     /// default applies; otherwise the SDK default is used.
     pub(crate) fn resolve(input: ConfigInput, inherit_timeout: bool) -> Result<Self, ConfigError> {
-        let api_key = resolve_value(input.api_key, API_KEY_ENV, None).ok_or_else(|| {
-            ConfigError::new(format!("No API key was provided. Pass api_key or set the {API_KEY_ENV} environment variable."))
+        let provider = resolve_provider(input.provider, input.api_key.as_deref());
+        let (key_env, default_base, default_model_name) = match provider {
+            Provider::TypeSafe => (API_KEY_ENV, DEFAULT_BASE_URL, DEFAULT_MODEL),
+            Provider::OpenJEV => (OPENJEV_API_KEY_ENV, OPENJEV_DEFAULT_BASE_URL, OPENJEV_DEFAULT_MODEL),
+        };
+        let api_key = resolve_value(input.api_key, key_env, None).ok_or_else(|| {
+            ConfigError::new(format!(
+                "No API key was provided. Pass api_key or set the {key_env} environment variable{}.",
+                if provider == Provider::TypeSafe {
+                    format!(", or set {OPENJEV_API_KEY_ENV} to use OpenJEV")
+                } else {
+                    String::new()
+                }
+            ))
         })?;
-        let base_url = resolve_value(input.base_url, BASE_URL_ENV, Some(DEFAULT_BASE_URL))
-            .unwrap_or_else(|| DEFAULT_BASE_URL.to_owned());
-        let default_model = resolve_value(input.model, DEFAULT_MODEL_ENV, Some(DEFAULT_MODEL))
-            .unwrap_or_else(|| DEFAULT_MODEL.to_owned());
+        let base_url = resolve_value(input.base_url, BASE_URL_ENV, Some(default_base))
+            .unwrap_or_else(|| default_base.to_owned());
+        let default_model = resolve_value(input.model, DEFAULT_MODEL_ENV, Some(default_model_name))
+            .unwrap_or_else(|| default_model_name.to_owned());
         let base_url = normalize_base_url(&base_url)?;
         let timeout = match input.timeout {
             Some(timeout) => {
@@ -76,6 +168,7 @@ impl Config {
             api_key,
             base_url,
             default_model,
+            provider,
             timeout,
             connect_timeout: input.connect_timeout,
             default_headers: build_headers(&input.header_pairs, input.headers.as_ref())?,
@@ -95,6 +188,11 @@ impl Config {
     /// Returns the model used when a call does not override it.
     pub(crate) fn default_model(&self) -> &str {
         &self.default_model
+    }
+
+    /// Returns the provider in use.
+    pub(crate) fn provider(&self) -> Provider {
+        self.provider
     }
 
     /// Returns the timeout applied to each HTTP operation.
@@ -121,6 +219,7 @@ impl fmt::Debug for Config {
             .field("api_key", &"***")
             .field("base_url", &self.base_url)
             .field("default_model", &self.default_model)
+            .field("provider", &self.provider)
             .field("timeout", &self.timeout)
             .field("connect_timeout", &self.connect_timeout)
             .field("default_headers", &redact_headers(&self.default_headers))

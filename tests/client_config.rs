@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use support::{Action, MockServer, Reply, model_card, system_one_body};
-use typesafe_sdk::constants::{API_KEY_ENV, BASE_URL_ENV, DEFAULT_MODEL_ENV};
+use typesafe_sdk::constants::{API_KEY_ENV, BASE_URL_ENV, DEFAULT_MODEL_ENV, JEV_PROVIDER_ENV, OPENJEV_API_KEY_ENV};
 use typesafe_sdk::{Error, HeaderMap, Noul, RetryPolicy, TypeSafeClient};
 
 /// A client with retries disabled, so timing assertions observe exactly one attempt.
@@ -79,12 +79,14 @@ fn the_builder_exposes_the_resolved_configuration() {
 #[tokio::test]
 async fn entry_points_and_environment_values_are_resolved() {
     let server = MockServer::start(|_| Action::json(200, system_one_body()));
-    let _guard = EnvGuard::capture([API_KEY_ENV, BASE_URL_ENV, DEFAULT_MODEL_ENV]);
+    let _guard = EnvGuard::capture([API_KEY_ENV, BASE_URL_ENV, DEFAULT_MODEL_ENV, OPENJEV_API_KEY_ENV, JEV_PROVIDER_ENV]);
     // SAFETY: see `EnvGuard::drop`; the guard restores these even if an assertion below panics.
     unsafe {
         std::env::remove_var(API_KEY_ENV);
         std::env::remove_var(BASE_URL_ENV);
         std::env::remove_var(DEFAULT_MODEL_ENV);
+        std::env::remove_var(OPENJEV_API_KEY_ENV);
+        std::env::remove_var(JEV_PROVIDER_ENV);
     }
 
     // Without a key, `from_env` fails with an error naming the variable to set.

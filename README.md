@@ -6,6 +6,11 @@ Rust SDK for the [TypeSafe AI](https://typesafe.ai) API — a community port of
 This crate is maintained by its contributors and is not affiliated with, or endorsed by, TypeSafe AI.
 It is licensed under [MIT](#license).
 
+> **OpenJEV support:** Jev is built by [TypeSafe](https://typesafe.ai). This fork keeps TypeSafe as
+> the default and adds optional support for [OpenJEV](https://openjev.sh), a free community gateway
+> to the same Jev model — set `OPENJEV_API_KEY` (or `JEV_PROVIDER=openjev`) to use it. Original
+> project: https://github.com/netf/typesafe-sdk-rs by @netf.
+
 TypeSafe answers typed questions about text or structured state in one request. This SDK exposes
 System One (`POST /v1/systemone`) and model listing (`GET /v1/models`) through async builders, with a
 synchronous mirror behind the `blocking` feature, structurally identical errors, and the same retry
@@ -373,6 +378,26 @@ ignored. `base_url` has trailing slashes stripped.
 | `timeout` | — | 10 s per request |
 | `connect_timeout` | — | none |
 | `retry` | — | the [default policy](#retries) |
+
+**OpenJEV** is a free community gateway to the same Jev model. The provider is selected automatically:
+explicit `.provider(Provider::OpenJEV)` or `JEV_PROVIDER=openjev` wins; otherwise TypeSafe is used
+when `TYPESAFE_API_KEY` is set; otherwise OpenJEV when only `OPENJEV_API_KEY` is set. Anyone with a
+TypeSafe key sees zero behaviour change. When OpenJEV is active, the defaults become
+`https://api.openjev.sh` for `base_url` and `openjev` for `model`; `TYPESAFE_BASE_URL` and
+`TYPESAFE_DEFAULT_MODEL` still override them.
+
+```rust
+use typesafe_sdk::{Provider, TypeSafeClient};
+
+# fn example() -> typesafe_sdk::Result<()> {
+let client = TypeSafeClient::builder()
+    .api_key("oj-...")
+    .provider(Provider::OpenJEV)
+    .build()?;
+# let _ = client;
+# Ok(())
+# }
+```
 
 ```rust
 use std::time::Duration;

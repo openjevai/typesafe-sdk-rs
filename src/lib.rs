@@ -26,6 +26,7 @@ pub mod blocking;
 pub mod constants;
 
 pub use crate::client::{ClientBuilder, TypeSafeClient};
+pub use crate::config::Provider;
 pub use crate::error::{
     ApiError, ConfigError, ConnectionError, Error, InvalidInputError, RateLimitError, Result,
     TimeoutError, ValidationError,

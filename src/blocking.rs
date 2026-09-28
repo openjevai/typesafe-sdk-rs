@@ -41,7 +41,7 @@ use crate::client::{
     CallOptions, ClientBuilder as AsyncClientBuilder, body_summary, log_transport_failure,
     transport_error,
 };
-use crate::config::{Config, ConfigInput};
+use crate::config::{Config, ConfigInput, Provider};
 use crate::constants::{LOG_TARGET, MODELS_PATH, REQUEST_ID_HEADER, SYSTEM_ONE_PATH};
 use crate::error::{ConfigError, Result};
 use crate::http::PreparedRequest;
@@ -158,6 +158,11 @@ impl TypeSafeClient {
     /// Returns the model used when a call does not override it.
     pub fn default_model(&self) -> &str {
         self.inner.config.default_model()
+    }
+
+    /// Returns the provider in use (TypeSafe or OpenJEV).
+    pub fn provider(&self) -> Provider {
+        self.inner.config.provider()
     }
 
     /// Returns the retry policy applied to every call that does not override it.
@@ -359,6 +364,16 @@ impl ClientBuilder {
         self
     }
 
+    /// Sets the API provider, overriding automatic detection.
+    ///
+    /// Pass `Provider::OpenJEV` to use [OpenJEV](https://openjev.sh), a free community
+    /// gateway to the same Jev model. TypeSafe remains the default when this is not set.
+    #[must_use]
+    pub fn provider(mut self, provider: Provider) -> Self {
+        self.input.provider = Some(provider);
+        self
+    }
+
     /// Sets the retry policy applied to every call that does not override it.
     #[must_use]
     pub fn retry(mut self, policy: RetryPolicy) -> Self {
@@ -430,6 +445,7 @@ impl fmt::Debug for ClientBuilder {
             .field("api_key", &self.input.api_key.as_ref().map(|_| "***"))
             .field("base_url", &self.input.base_url)
             .field("model", &self.input.model)
+            .field("provider", &self.input.provider)
             .field("retry", &self.retry)
             .field("timeout", &self.input.timeout)
             .field("connect_timeout", &self.input.connect_timeout)

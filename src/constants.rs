@@ -24,6 +24,25 @@ pub const DEFAULT_BASE_URL: &str = "https://api.typesafe.ai";
 /// Default model name.
 pub const DEFAULT_MODEL: &str = "jev-latest";
 
+/// Environment variable for the OpenJEV API key: `OPENJEV_API_KEY`.
+///
+/// OpenJEV is a free community gateway to the same Jev model built by TypeSafe.
+/// When `OPENJEV_API_KEY` is set (and `TYPESAFE_API_KEY` is not), the SDK uses OpenJEV
+/// automatically. Set `JEV_PROVIDER=openjev` to force it.
+pub const OPENJEV_API_KEY_ENV: &str = "OPENJEV_API_KEY";
+
+/// Environment variable for explicit provider selection: `JEV_PROVIDER`.
+///
+/// Set to `openjev` to use OpenJEV, or `typesafe` to use TypeSafe (the default).
+/// An explicit `.provider(...)` on the builder takes precedence over this variable.
+pub const JEV_PROVIDER_ENV: &str = "JEV_PROVIDER";
+
+/// Default API base URL for OpenJEV.
+pub const OPENJEV_DEFAULT_BASE_URL: &str = "https://api.openjev.sh";
+
+/// Default model name for OpenJEV.
+pub const OPENJEV_DEFAULT_MODEL: &str = "openjev";
+
 /// Default timeout applied to each HTTP operation.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
